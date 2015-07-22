@@ -4,12 +4,13 @@
 #include "colors_csgo.inc"
 #include "emitsoundany.inc"
 
-#define PLUGIN_VERSION "1.01"
+#pragma newdecls required
+#define PLUGIN_VERSION "1.02"
 
 /*
 * Plugin Information - Please do not change this
 */
-public Plugin:myinfo =
+public Plugin myinfo =
 {
   name        = "Suicide Bomber",
   author      = "Invex | Byte",
@@ -22,34 +23,34 @@ public Plugin:myinfo =
 #define BOMB_SLOT 4
 #define ASCII_LOWER_START 97
 
-new String:PREFIX[] = "[{olive}SuicideBomber{default}] ";
-new Handle:bombCarriers = INVALID_HANDLE;
-new Handle:originalCarriers = INVALID_HANDLE;
-new bombEntIndex[MAXPLAYERS+1] = {-1, ...}; //All bomb entities
-new numKilledPlayers[MAXPLAYERS+1] = {0, ...}; //Number of players each sucide bomber kills
-new diedByBomb[MAXPLAYERS+1] = {-1, ...}; //if non -1, contains client who killed said player
-new bool:isBombEquipedByPlayer[MAXPLAYERS+1] = {false, ...}; //True if player currently has bomb equiped
-new bool:showUseErrorMessage[MAXPLAYERS+1] = {true, ...};
-new bool:isSpawnProtection = false;
-new bool:isEnabled;
-new String:EXPLOSION_SOUND_PATH[256] = "";
+char PREFIX[] = "[{olive}SuicideBomber{default}] ";
+Handle bombCarriers = INVALID_HANDLE;
+Handle originalCarriers = INVALID_HANDLE;
+int bombEntIndex[MAXPLAYERS+1] = {-1, ...}; //All bomb entities
+int numKilledPlayers[MAXPLAYERS+1] = {0, ...}; //Number of players each sucide bomber kills
+int diedByBomb[MAXPLAYERS+1] = {-1, ...}; //if non -1, contains client who killed said player
+bool isBombEquipedByPlayer[MAXPLAYERS+1] = {false, ...}; //True if player currently has bomb equiped
+bool showUseErrorMessage[MAXPLAYERS+1] = {true, ...};
+bool isSpawnProtection = false;
+bool isEnabled;
+char EXPLOSION_SOUND_PATH[256] = "";
 
 //Handles
-new Handle:g_suicide_bomber_enabled = INVALID_HANDLE;
-new Handle:g_disable_bomb_sites = INVALID_HANDLE;
-new Handle:g_max_c4_distributed = INVALID_HANDLE;
-new Handle:g_bots_can_have_bomb = INVALID_HANDLE;
-new Handle:g_VIP_enabled = INVALID_HANDLE;
-new Handle:g_VIP_flag = INVALID_HANDLE;
-new Handle:g_VIP_entries = INVALID_HANDLE;
-new Handle:g_sp_time = INVALID_HANDLE;
-new Handle:g_highlightPlayer_RED = INVALID_HANDLE;
-new Handle:g_highlightPlayer_GREEN = INVALID_HANDLE;
-new Handle:g_highlightPlayer_BLUE = INVALID_HANDLE;
-new Handle:g_explosion_sound = INVALID_HANDLE;
+Handle g_suicide_bomber_enabled = INVALID_HANDLE;
+Handle g_disable_bomb_sites = INVALID_HANDLE;
+Handle g_max_c4_distributed = INVALID_HANDLE;
+Handle g_bots_can_have_bomb = INVALID_HANDLE;
+Handle g_VIP_enabled = INVALID_HANDLE;
+Handle g_VIP_flag = INVALID_HANDLE;
+Handle g_VIP_entries = INVALID_HANDLE;
+Handle g_sp_time = INVALID_HANDLE;
+Handle g_highlightPlayer_RED = INVALID_HANDLE;
+Handle g_highlightPlayer_GREEN = INVALID_HANDLE;
+Handle g_highlightPlayer_BLUE = INVALID_HANDLE;
+Handle g_explosion_sound = INVALID_HANDLE;
 
-new g_ExplosionSprite;
-new RenderOffs;
+int g_ExplosionSprite;
+int RenderOffs;
 
 enum FX
 {
@@ -98,7 +99,7 @@ enum Render
 /*
 * Plugin Start
 */
-public OnPluginStart()
+public void OnPluginStart()
 {
   //Load translation
   LoadTranslations("suicidebomber.phrases");
@@ -119,7 +120,7 @@ public OnPluginStart()
   g_explosion_sound = CreateConVar("sm_suicidebomber_explosion_sound", "sound/invex_gaming/misc/wtfboom_scream.mp3", "Explosion sound to play when a suicider bomber suicides. (def. \"sound/invex_gaming/misc/wtfboom_scream.mp3\")")
   
   //Attempt to automatically set g_sp_time if running Spawn Protection [Added CS:GO Support] by Fredd
-  new Handle:freddSP = FindConVar("sp_time");
+  Handle freddSP = FindConVar("sp_time");
   if (freddSP != INVALID_HANDLE && GetConVarFloat(g_sp_time) == 0.0)
     SetConVarFloat(g_sp_time, GetConVarFloat(freddSP));
   
@@ -152,13 +153,13 @@ public OnPluginStart()
 /*
 * On Map Start
 */
-public OnMapStart()
+public void OnMapStart()
 {
   if (!isEnabled) 
     return;
   
   //Precache sounds
-  new String:explosionSoundStrPath[256];
+  char explosionSoundStrPath[256];
   GetConVarString(g_explosion_sound, explosionSoundStrPath, sizeof(explosionSoundStrPath));
   AddFileToDownloadsTable(explosionSoundStrPath);
   ReplaceString(explosionSoundStrPath, sizeof(explosionSoundStrPath), "sound/", ""); //Remove sound folder prefix
@@ -170,7 +171,7 @@ public OnMapStart()
   
   if (GetConVarBool(g_disable_bomb_sites)) {
     //Remove all real bomb sites
-    new iEnt = -1;
+    int iEnt = -1;
     while((iEnt = FindEntityByClassname(iEnt, "func_bomb_target")) != -1) { //Find bombsites
       AcceptEntityInput(iEnt,"kill"); //Destroy the entity
     }
@@ -189,15 +190,15 @@ public OnMapStart()
 /*
 * If enable convar is changed, use this to turn the plugin off or on
 */
-public ConVarChange_enabled(Handle:convar, const String:oldValue[], const String:newValue[])
+public void ConVarChange_enabled(Handle convar, const char[] oldValue, const char[] newValue)
 {
-  isEnabled = bool:StringToInt(newValue) ;
+  isEnabled = view_as<bool>(StringToInt(newValue));
 }
 
 /*
 * Round Start
 */
-public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
+public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast)
 {
   if (!isEnabled) 
     return Plugin_Continue;
@@ -211,32 +212,32 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
   CreateTimer(15.0, TurnOffSpawnProtectoon);
   
   //Get terrorist list
-  new Handle:terroristList = CreateArray();
-  new terroristCount = 0;
-  new bool:botCanHaveBomb = GetConVarBool(g_bots_can_have_bomb);
+  Handle terroristList = CreateArray();
+  int terroristCount = 0;
+  bool botCanHaveBomb = GetConVarBool(g_bots_can_have_bomb);
   
-  for (new i = 1; i <= MaxClients; ++i) { 
+  for (int i = 1; i <= MaxClients; ++i) { 
     if (IsClientInGame(i) && IsPlayerAlive(i) && GetClientTeam(i) == 2) {
       
       //Check if bot and if bot is allowed to have bomb
       if (IsFakeClient(i) && !botCanHaveBomb)
         continue;
       
-      new numEntries = 1;
+      int numEntries = 1;
       
       //Check if user is a VIP player if VIP mode is on
       if (GetConVarBool(g_VIP_enabled)) {
-        new String:flag[2];
+        char flag[2];
         GetConVarString(g_VIP_flag, flag, sizeof(flag)); //get flag as string
-        new flagNum = flag[0]; //get ascii int
+        int flagNum = flag[0]; //get ascii int
         
-        new ADMFLAG_PROVIDED = (1 << (flagNum - ASCII_LOWER_START));
+        int ADMFLAG_PROVIDED = (1 << (flagNum - ASCII_LOWER_START));
         if (CheckCommandAccess(i, "", ADMFLAG_PROVIDED))
           numEntries = GetConVarInt(g_VIP_entries); //VIP players are more likely to get bomb 
       }
 
       //Add entries for this player
-      for (new j = 0; j < numEntries; ++j) {
+      for (int j = 0; j < numEntries; ++j) {
         PushArrayCell(terroristList, i);
         ++terroristCount; 
       }
@@ -247,21 +248,21 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
     return Plugin_Continue;
   
   //Distribute C4 Explosives
-  new maxC4num = GetConVarInt(g_max_c4_distributed);
+  int maxC4num = GetConVarInt(g_max_c4_distributed);
   
   if (maxC4num > terroristCount)
     maxC4num = terroristCount;
   
-  for(new i = 0; i < maxC4num; ++i) {
+  for(int i = 0; i < maxC4num; ++i) {
     //Generate a random number
-    new randIndex = GetRandomInt(0, terroristCount - 1);
+    int randIndex = GetRandomInt(0, terroristCount - 1);
     --terroristCount; //decrement terroristCount
     
-    new chosenT = GetArrayCell(terroristList, randIndex);
+    int chosenT = GetArrayCell(terroristList, randIndex);
     RemoveFromArray(terroristList, randIndex); //remove index so chosenT isn't picked again
     
     //Make sure we haven't already picked this T
-    new isOriginalCarrier = FindValueInArray(originalCarriers, chosenT);
+    int isOriginalCarrier = FindValueInArray(originalCarriers, chosenT);
     if (isOriginalCarrier != -1)  //If already picked, continue
       continue;
     
@@ -284,7 +285,7 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 /*
 * Player Death
 */
-public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
+public Action Event_PlayerDeath(Handle event, const char[] name, bool dontBroadcast)
 {
   if (!isEnabled) 
     return Plugin_Continue;
@@ -294,8 +295,8 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
     return Plugin_Continue;
   
   //Get client and attacker
-  new client = GetClientOfUserId(GetEventInt(event, "userid"));
-  new attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
+  int client = GetClientOfUserId(GetEventInt(event, "userid"));
+  int attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
   
   //If death was not a suicide, ignore it
   if (client != attacker)
@@ -311,7 +312,7 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
     //Check if this was last person to die
     //Reset bomb carrier if last CT to die 
     if (numKilledPlayers[diedByBomb[client]] == 0) {
-      new bombCarrierIndex = FindValueInArray(bombCarriers, diedByBomb[client]);
+      int bombCarrierIndex = FindValueInArray(bombCarriers, diedByBomb[client]);
       RemoveFromArray(bombCarriers, bombCarrierIndex);
       isBombEquipedByPlayer[diedByBomb[client]] = false;
     }
@@ -327,7 +328,7 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
   }
   
   //Check to see if this player was a bomb carrier
-  new bombCarrierIndex = FindValueInArray(bombCarriers, client); 
+  int bombCarrierIndex = FindValueInArray(bombCarriers, client); 
   
   if (bombCarrierIndex == -1) //if this was not bomb carrier, ignore
     return Plugin_Continue;
@@ -340,40 +341,40 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
     AcceptEntityInput(bombEntIndex[client],"kill"); 
   
   //Get death position of suicider bomber
-  new Float:suicide_bomber_vec[3];
+  float suicide_bomber_vec[3];
   GetClientAbsOrigin(client, suicide_bomber_vec);
    
   //Get players team and friendly fire information
-  new Handle:friendlyfire = FindConVar("mp_friendlyfire");
-  new bool:ffON = GetConVarBool(friendlyfire);
-  new enemyTeam = 3; //CT is the enemy team
+  Handle friendlyfire = FindConVar("mp_friendlyfire");
+  bool ffON = GetConVarBool(friendlyfire);
+  int enemyTeam = 3; //CT is the enemy team
   
   //For each alive CT
-  new iMaxClients = GetMaxClients();
+  int iMaxClients = GetMaxClients();
   numKilledPlayers[client] = 0; //reset kills by bomb to 0
-  new deathList[MAXPLAYERS+1]; //store players that this bomb kills
+  int deathList[MAXPLAYERS+1]; //store players that this bomb kills
 
-  for (new i = 1; i <= iMaxClients; ++i)
+  for (int i = 1; i <= iMaxClients; ++i)
   {
     //Check that client is a real player who is alive and is a CT
     if (IsClientInGame(i) && IsPlayerAlive(i) )
     {
       //Allow hurt enemies unless FF is on
       if (ffON || GetClientTeam(i) == enemyTeam) {
-        new Float:ct_vec[3];
+        float ct_vec[3];
         GetClientAbsOrigin(i, ct_vec);
 
-        new Float:distance = GetVectorDistance(ct_vec, suicide_bomber_vec, false);
+        float distance = GetVectorDistance(ct_vec, suicide_bomber_vec, false);
         
         //If CT was in explosion radius, damage or kill them
         //Formula used: damage = 200 - (d/2)
-        new damage = RoundToFloor(200.0 - (distance / 2.0));
+        int damage = RoundToFloor(200.0 - (distance / 2.0));
         
         if (damage <= 0) //this player was not damaged 
           continue;
         
         //Damage the surrounding players
-        new curHP = GetClientHealth(i);
+        int curHP = GetClientHealth(i);
         if (curHP - damage <= 0) {
           diedByBomb[i] = client; //client killed this 'i' target
           deathList[numKilledPlayers[client]] = i;
@@ -387,10 +388,10 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
     }
   }
 
-  new tempNumKilledPlayers = numKilledPlayers[client]; //locally cache the global var as it will change shortly
+  int tempNumKilledPlayers = numKilledPlayers[client]; //locally cache the global var as it will change shortly
   
   //Get suicide bomber name
-  new String:bombername[MAX_NAME_LENGTH+1];
+  char bombername[MAX_NAME_LENGTH+1];
   GetClientName(client, bombername, sizeof(bombername));
   
   if (tempNumKilledPlayers == 0)
@@ -411,7 +412,7 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
   }
   else {
     //Kill all players on death list
-    for (new i = 0; i < tempNumKilledPlayers; ++i) {
+    for (int i = 0; i < tempNumKilledPlayers; ++i) {
       ForcePlayerSuicide(deathList[i]);
     }
   }
@@ -422,13 +423,13 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 /*
 * Bomb Drop
 */
-public Action:Event_BombDrop(Handle:event, const String:name[], bool:dontBroadcast)
+public Action Event_BombDrop(Handle event, const char[] name, bool dontBroadcast)
 {
   if (!isEnabled) 
     return Plugin_Continue;
   
   
-  new client = GetClientOfUserId(GetEventInt(event, "userid"));
+  int client = GetClientOfUserId(GetEventInt(event, "userid"));
     
   //Save bomb ent index
   bombEntIndex[client] = GetEventInt(event, "entindex");
@@ -440,7 +441,7 @@ public Action:Event_BombDrop(Handle:event, const String:name[], bool:dontBroadca
   isBombEquipedByPlayer[client] = false;
   
   //Remove this player as original carrier (no longer required)
-  new originalCarrierIndex = FindValueInArray(originalCarriers, client);
+  int originalCarrierIndex = FindValueInArray(originalCarriers, client);
   RemoveFromArray(originalCarriers, originalCarrierIndex);
   
   return Plugin_Continue;
@@ -449,18 +450,18 @@ public Action:Event_BombDrop(Handle:event, const String:name[], bool:dontBroadca
 /*
 * Bomb Pick up
 */
-public Action:Event_BombPickUp(Handle:event, const String:name[], bool:dontBroadcast)
+public Action Event_BombPickUp(Handle event, const char[] name, bool dontBroadcast)
 {
   if (!isEnabled) 
     return Plugin_Continue;
 
-  new client = GetClientOfUserId(GetEventInt(event, "userid"));
+  int client = GetClientOfUserId(GetEventInt(event, "userid"));
  
   //This is a new bomb carrier, set em up
   PushArrayCell(bombCarriers, client);
   isBombEquipedByPlayer[client] = true;
   
-  new isOriginalCarrier = FindValueInArray(originalCarriers, client);
+  int isOriginalCarrier = FindValueInArray(originalCarriers, client);
   
   //Show instructions to this user if they aren't the original carrier
   //Needed to avoid duplicate message
@@ -468,7 +469,7 @@ public Action:Event_BombPickUp(Handle:event, const String:name[], bool:dontBroad
     CPrintToChat(client, "%s%t", PREFIX, "You Picked Up Suicide Bomb");
     
   //Add a glow to bomb carrier
-  set_rendering(client, FX:FxDistort, GetConVarInt(g_highlightPlayer_RED), GetConVarInt(g_highlightPlayer_GREEN), GetConVarInt(g_highlightPlayer_BLUE), Render:RENDER_TRANSADD, 255);
+  set_rendering(client, view_as<FX>(FxDistort), GetConVarInt(g_highlightPlayer_RED), GetConVarInt(g_highlightPlayer_GREEN), GetConVarInt(g_highlightPlayer_BLUE), view_as<Render>(RENDER_TRANSADD), 255);
     
   return Plugin_Continue;
 }
@@ -476,12 +477,12 @@ public Action:Event_BombPickUp(Handle:event, const String:name[], bool:dontBroad
 /*
 * Bomb Pick up Pre
 */
-public Action:Event_BombPickUpPre(Handle:event, const String:name[], bool:dontBroadcast)
+public Action Event_BombPickUpPre(Handle event, const char[] name, bool dontBroadcast)
 {
   if (!isEnabled) 
     return Plugin_Continue;
 
-  new client = GetClientOfUserId(GetEventInt(event, "userid"));
+  int client = GetClientOfUserId(GetEventInt(event, "userid"));
   
   //Check if client is bot and bot bomb is disabled
   //If so, disable bomb pickup
@@ -492,7 +493,7 @@ public Action:Event_BombPickUpPre(Handle:event, const String:name[], bool:dontBr
 }
 
 //Readd glow to bomb carrier
-public Action:ReAddRedGlow(Handle:timer, client)
+public Action ReAddRedGlow(Handle timer, int client)
 {
   //Check that this client is still in the game
   if (!IsClientInGame(client) || !IsPlayerAlive(client) ) {
@@ -500,16 +501,16 @@ public Action:ReAddRedGlow(Handle:timer, client)
   }
   
   //Check that player still has bomb
-  new c4 = GetPlayerWeaponSlot(client, BOMB_SLOT);
+  int c4 = GetPlayerWeaponSlot(client, BOMB_SLOT);
   
   if (c4 != -1)
-    set_rendering(client, FX:FxDistort, GetConVarInt(g_highlightPlayer_RED), GetConVarInt(g_highlightPlayer_GREEN), GetConVarInt(g_highlightPlayer_BLUE), Render:RENDER_TRANSADD, 255); //Add a glow to bomb carrier
+    set_rendering(client, view_as<FX>(FxDistort), GetConVarInt(g_highlightPlayer_RED), GetConVarInt(g_highlightPlayer_GREEN), GetConVarInt(g_highlightPlayer_BLUE), view_as<Render>(RENDER_TRANSADD), 255); //Add a glow to bomb carrier
 }
 
 /*
 * Turn off spawn protection bool
 */
-public Action:TurnOffSpawnProtectoon(Handle:timer)
+public Action TurnOffSpawnProtectoon(Handle timer)
 {
   isSpawnProtection = false;
 }
@@ -517,10 +518,10 @@ public Action:TurnOffSpawnProtectoon(Handle:timer)
 /*
 * Needed for glow
 */
-stock set_rendering(index, FX:fx=FxNone, r=255, g=255, b=255, Render:render=Normal, amount=255)
+stock void set_rendering(int index, FX fx=FxNone, int r=255, int g=255, int b=255, Render render=Normal, int amount=255)
 {
-  SetEntProp(index, Prop_Send, "m_nRenderFX", _:fx, 1);
-  SetEntProp(index, Prop_Send, "m_nRenderMode", _:render, 1);  
+  SetEntProp(index, Prop_Send, "m_nRenderFX", fx, 1);
+  SetEntProp(index, Prop_Send, "m_nRenderMode", render, 1);  
   SetEntData(index, RenderOffs, r, 1, true);
   SetEntData(index, RenderOffs + 1, g, 1, true);
   SetEntData(index, RenderOffs + 2, b, 1, true);
@@ -530,7 +531,7 @@ stock set_rendering(index, FX:fx=FxNone, r=255, g=255, b=255, Render:render=Norm
 /*
 * Bind button to suicide
 */
-public Action:OnPlayerRunCmd(client, &buttons)
+public Action OnPlayerRunCmd(int client, int &buttons)
 {
   if (!isEnabled) 
       return Plugin_Continue;
@@ -538,19 +539,19 @@ public Action:OnPlayerRunCmd(client, &buttons)
   if (IsClientInGame(client) && IsPlayerAlive(client)) {
     
     //Ensure client is a bomb carrier and has bomb equiped
-    new isBombCarrier = FindValueInArray(bombCarriers, client);
+    int isBombCarrier = FindValueInArray(bombCarriers, client);
     
     //Return if not bomb carrier or not equiped
     if (isBombCarrier == -1 || !isBombEquipedByPlayer[client])
       return Plugin_Continue;
   
-    new weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+    int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
     
     //Return if invalid weapon entity
     if (weapon == -1)
       return Plugin_Continue;
     
-    decl String:weaponName[64];
+    char weaponName[64];
     GetEdictClassname(weapon, weaponName, sizeof(weaponName));
 
     if (buttons & IN_USE)
@@ -583,7 +584,7 @@ public Action:OnPlayerRunCmd(client, &buttons)
 }
 
 //Reenable use error message
-public Action:ReenableMessages(Handle:timer, any:client)
+public Action ReenableMessages(Handle timer, any client)
 {
   showUseErrorMessage[client] = true;
 }
