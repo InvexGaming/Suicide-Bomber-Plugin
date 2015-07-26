@@ -5,7 +5,7 @@
 #include "emitsoundany.inc"
 
 #pragma newdecls required
-#define PLUGIN_VERSION "1.02"
+#define PLUGIN_VERSION "1.03"
 
 /*
 * Plugin Information - Please do not change this
@@ -14,7 +14,7 @@ public Plugin myinfo =
 {
   name        = "Suicide Bomber",
   author      = "Invex | Byte",
-  description = "Disables bomb sites and allows bomb carrier to suicide to kill all players around them.",
+  description = "Allows players to become suicide bombers so they can explode and kill nearby players.",
   version     = PLUGIN_VERSION,
   url         = "http://www.invexgaming.com.au"
 };
@@ -24,8 +24,8 @@ public Plugin myinfo =
 #define ASCII_LOWER_START 97
 
 char PREFIX[] = "[{olive}SuicideBomber{default}] ";
-Handle bombCarriers = INVALID_HANDLE;
-Handle originalCarriers = INVALID_HANDLE;
+Handle bombCarriers = null;
+Handle originalCarriers = null;
 int bombEntIndex[MAXPLAYERS+1] = {-1, ...}; //All bomb entities
 int numKilledPlayers[MAXPLAYERS+1] = {0, ...}; //Number of players each sucide bomber kills
 int diedByBomb[MAXPLAYERS+1] = {-1, ...}; //if non -1, contains client who killed said player
@@ -36,18 +36,18 @@ bool isEnabled;
 char EXPLOSION_SOUND_PATH[256] = "";
 
 //Handles
-Handle g_suicide_bomber_enabled = INVALID_HANDLE;
-Handle g_disable_bomb_sites = INVALID_HANDLE;
-Handle g_max_c4_distributed = INVALID_HANDLE;
-Handle g_bots_can_have_bomb = INVALID_HANDLE;
-Handle g_VIP_enabled = INVALID_HANDLE;
-Handle g_VIP_flag = INVALID_HANDLE;
-Handle g_VIP_entries = INVALID_HANDLE;
-Handle g_sp_time = INVALID_HANDLE;
-Handle g_highlightPlayer_RED = INVALID_HANDLE;
-Handle g_highlightPlayer_GREEN = INVALID_HANDLE;
-Handle g_highlightPlayer_BLUE = INVALID_HANDLE;
-Handle g_explosion_sound = INVALID_HANDLE;
+Handle g_suicide_bomber_enabled = null;
+Handle g_disable_bomb_sites = null;
+Handle g_max_c4_distributed = null;
+Handle g_bots_can_have_bomb = null;
+Handle g_VIP_enabled = null;
+Handle g_VIP_flag = null;
+Handle g_VIP_entries = null;
+Handle g_sp_time = null;
+Handle g_highlightPlayer_RED = null;
+Handle g_highlightPlayer_GREEN = null;
+Handle g_highlightPlayer_BLUE = null;
+Handle g_explosion_sound = null;
 
 int g_ExplosionSprite;
 int RenderOffs;
@@ -121,15 +121,19 @@ public void OnPluginStart()
   
   //Attempt to automatically set g_sp_time if running Spawn Protection [Added CS:GO Support] by Fredd
   Handle freddSP = FindConVar("sp_time");
-  if (freddSP != INVALID_HANDLE && GetConVarFloat(g_sp_time) == 0.0)
+  if (freddSP != null && GetConVarFloat(g_sp_time) == 0.0)
     SetConVarFloat(g_sp_time, GetConVarFloat(freddSP));
+  
+  //Attempt to automatically set g_sp_time if running Easy Spawn Protection
+  Handle easySP = FindConVar("sm_easysp_time");
+  if (easySP != null && GetConVarFloat(g_sp_time) == 0.0)
+    SetConVarFloat(g_sp_time, GetConVarFloat(easySP));
   
   //Event hooks
   HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
   HookEvent("round_start", Event_RoundStart);
   HookEvent("bomb_dropped", Event_BombDrop);
   HookEvent("bomb_pickup", Event_BombPickUp);
-  HookEvent("bomb_pickup", Event_BombPickUpPre, EventHookMode_Pre);
   
   //Set random number seed
   SetRandomSeed(GetTime());
@@ -209,7 +213,7 @@ public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadca
   
   //Set spawn protection to be on
   isSpawnProtection = true;
-  CreateTimer(15.0, TurnOffSpawnProtectoon);
+  CreateTimer(GetConVarFloat(g_sp_time), TurnOffSpawnProtectoon);
   
   //Get terrorist list
   Handle terroristList = CreateArray();
@@ -272,8 +276,9 @@ public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadca
     //Give this chosen T a C4
     GivePlayerItem(chosenT, "weapon_c4");
     
-    //Readd colour after 15 seconds, needed due to spawn protection
-    CreateTimer(15.2, ReAddRedGlow, chosenT, chosenT);
+    //Readd colour after some time, needed due to spawn protection
+    if (GetConVarFloat(g_sp_time) != 0.0)
+      CreateTimer(GetConVarFloat(g_sp_time) + 0.1, ReAddRedGlow, chosenT, chosenT);
     
     //Let them know!
     CPrintToChat(chosenT, "%s%t", PREFIX, "You Are Suicide Bomber");
@@ -457,6 +462,16 @@ public Action Event_BombPickUp(Handle event, const char[] name, bool dontBroadca
 
   int client = GetClientOfUserId(GetEventInt(event, "userid"));
  
+  //Check if client is bot and bot bomb is disabled
+  //If so, disable bomb pickup
+  if (IsFakeClient(client) && !GetConVarBool(g_bots_can_have_bomb)) {
+    int weaponslot = GetPlayerWeaponSlot(client, BOMB_SLOT);
+    if (weaponslot != -1) {
+      CS_DropWeapon(client, weaponslot, true);
+      return Plugin_Handled;
+    }
+  }
+ 
   //This is a new bomb carrier, set em up
   PushArrayCell(bombCarriers, client);
   isBombEquipedByPlayer[client] = true;
@@ -486,8 +501,13 @@ public Action Event_BombPickUpPre(Handle event, const char[] name, bool dontBroa
   
   //Check if client is bot and bot bomb is disabled
   //If so, disable bomb pickup
-  if (IsFakeClient(client) && !GetConVarBool(g_bots_can_have_bomb))
-    return Plugin_Handled;
+  if (IsFakeClient(client) && !GetConVarBool(g_bots_can_have_bomb)) {
+    int weaponslot = GetPlayerWeaponSlot(client, BOMB_SLOT);
+    if (weaponslot != -1) {
+      CS_DropWeapon(client, weaponslot, true);
+      return Plugin_Handled;
+    }
+  }
   
   return Plugin_Continue;    
 }
