@@ -395,13 +395,16 @@ public Action Event_PlayerDeath(Handle event, const char[] name, bool dontBroadc
   TE_SetupExplosion(suicide_bomber_vec, g_ExplosionSprite, 10.0, 1, 0, 250, 5000);
   TE_SendToAll();
   
-  //If no players died, reset bomb carrier
+  //Kill any players that may have died
   if (numKilledPlayers > 0) {
     //Kill all players on death list
     for (int i = 0; i < numKilledPlayers; ++i) {
       ForcePlayerSuicide(deathList[i]);
     }
   }
+  
+  //Disable bomb dropped status so future deaths for this player don't trigger explosion
+  isBombDroppedSuicide[client] = false;
   
   return Plugin_Continue;
 }
