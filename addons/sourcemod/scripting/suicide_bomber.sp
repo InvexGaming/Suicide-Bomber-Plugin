@@ -5,7 +5,7 @@
 #include "emitsoundany.inc"
 
 #pragma newdecls required
-#define PLUGIN_VERSION "1.04"
+#define PLUGIN_VERSION "1.05"
 
 /*
 * Plugin Information - Please do not change this
@@ -22,6 +22,7 @@ public Plugin myinfo =
 //Definitions
 #define BOMB_SLOT 4
 #define ASCII_LOWER_START 97
+#define SKIP_ROUNDS 2
 
 char PREFIX[] = "[{olive}SuicideBomber{default}] ";
 Handle bombCarriers = null;
@@ -32,6 +33,7 @@ bool showUseErrorMessage[MAXPLAYERS+1] = {true, ...};
 bool isSpawnProtection = false;
 bool isEnabled;
 char EXPLOSION_SOUND_PATH[256] = "";
+int skipRoundCounter = 0;
 
 //ConVars
 ConVar g_suicide_bomber_enabled = null;
@@ -210,6 +212,15 @@ public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadca
 {
   if (!isEnabled) 
     return Plugin_Continue;
+
+  //Check if we should skip this round
+  if (skipRoundCounter != 0) {
+    --skipRoundCounter;
+    return Plugin_Continue;
+  }
+  else {
+    skipRoundCounter = SKIP_ROUNDS;
+  }
   
   //Reset bomb carrier arrays
   ClearArray(bombCarriers);
@@ -425,7 +436,8 @@ public Action Event_BombDrop(Handle event, const char[] name, bool dontBroadcast
   //If this client suicided with the bomb, remove them as a suicide bomber
   if (isBombDroppedSuicide[client]) {
     int bombCarrierIndex = FindValueInArray(bombCarriers, client);
-    RemoveFromArray(bombCarriers, bombCarrierIndex);
+    if (bombCarrierIndex != -1)
+      RemoveFromArray(bombCarriers, bombCarrierIndex);
     
     //Destory the bomb entity as it was used
     int bombEnt = GetEventInt(event, "entindex");
@@ -435,7 +447,9 @@ public Action Event_BombDrop(Handle event, const char[] name, bool dontBroadcast
   
   //Remove this player as original carrier (no longer required)
   int originalCarrierIndex = FindValueInArray(originalCarriers, client);
-  RemoveFromArray(originalCarriers, originalCarrierIndex);
+  
+  if (originalCarrierIndex != -1)
+    RemoveFromArray(originalCarriers, originalCarrierIndex);
   
   return Plugin_Continue;
 }
