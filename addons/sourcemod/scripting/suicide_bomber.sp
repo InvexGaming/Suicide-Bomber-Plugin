@@ -5,7 +5,7 @@
 #include "emitsoundany.inc"
 
 #pragma newdecls required
-#define PLUGIN_VERSION "1.05"
+#define PLUGIN_VERSION "1.06"
 
 /*
 * Plugin Information - Please do not change this
@@ -213,6 +213,10 @@ public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadca
   if (!isEnabled) 
     return Plugin_Continue;
 
+  //Reset bomb carrier arrays
+  ClearArray(bombCarriers);
+  ClearArray(originalCarriers);
+    
   //Check if we should skip this round
   if (skipRoundCounter != 0) {
     --skipRoundCounter;
@@ -221,10 +225,6 @@ public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadca
   else {
     skipRoundCounter = SKIP_ROUNDS;
   }
-  
-  //Reset bomb carrier arrays
-  ClearArray(bombCarriers);
-  ClearArray(originalCarriers);
   
   //Set spawn protection to be on
   isSpawnProtection = true;
@@ -433,17 +433,18 @@ public Action Event_BombDrop(Handle event, const char[] name, bool dontBroadcast
   //Remove glow from carrier
   set_rendering(client);
   
-  //If this client suicided with the bomb, remove them as a suicide bomber
+  //If this client suicided with the bomb
   if (isBombDroppedSuicide[client]) {
-    int bombCarrierIndex = FindValueInArray(bombCarriers, client);
-    if (bombCarrierIndex != -1)
-      RemoveFromArray(bombCarriers, bombCarrierIndex);
-    
     //Destory the bomb entity as it was used
     int bombEnt = GetEventInt(event, "entindex");
     if (IsValidEntity(bombEnt))
       AcceptEntityInput(bombEnt,"kill");
   }
+  
+  //Remove this player as a bomb carrier
+  int bombCarrierIndex = FindValueInArray(bombCarriers, client);
+  if (bombCarrierIndex != -1)
+    RemoveFromArray(bombCarriers, bombCarrierIndex);
   
   //Remove this player as original carrier (no longer required)
   int originalCarrierIndex = FindValueInArray(originalCarriers, client);
